@@ -1,44 +1,52 @@
 import React, { useState } from 'react';
 import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
-  Platform,
+  View, Text, ScrollView, StyleSheet, TouchableOpacity, Platform,
 } from 'react-native';
-import { colors } from '../theme/colors';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { colors, shadows } from '../theme/colors';
+import { useApp } from '../context/AppContext';
 
-const SAMPLE_CART = [
-  { id: '1', name: 'Monstera Deliciosa', price: 25, emoji: '🌿', qty: 2 },
-  { id: '3', name: 'Snake Plant', price: 22, emoji: '🌱', qty: 1 },
-  { id: '7', name: 'Cactus Mix', price: 12, emoji: '🌵', qty: 3 },
-];
-
-export default function CartScreen() {
-  const [items, setItems] = useState(SAMPLE_CART);
+export default function CartScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
+  const { cart, removeFromCart, updateQty, clearCart, cartTotal } = useApp();
   const [ordered, setOrdered] = useState(false);
+  const [promoCode, setPromoCode] = useState('');
+  const [promoApplied, setPromoApplied] = useState(false);
 
-  const updateQty = (id, delta) => {
-    setItems(prev =>
-      prev
-        .map(i => i.id === id ? { ...i, qty: i.qty + delta } : i)
-        .filter(i => i.qty > 0)
-    );
+  const delivery = cartTotal >= 50 ? 0 : 5.99;
+  const discount = promoApplied ? cartTotal * 0.1 : 0;
+  const total = cartTotal + delivery - discount;
+
+  const handleOrder = () => {
+    setOrdered(true);
+    clearCart();
   };
-
-  const subtotal = items.reduce((sum, i) => sum + i.price * i.qty, 0);
-  const delivery = 5.99;
-  const total = subtotal + delivery;
 
   if (ordered) {
     return (
-      <View style={styles.successContainer}>
+      <View style={[styles.container, styles.successContainer]}>
         <Text style={styles.successEmoji}>🎉</Text>
-        <Text style={styles.successTitle}>Order Placed!</Text>
-        <Text style={styles.successSub}>Your plants are on their way. Estimated delivery: 3-5 days.</Text>
-        <TouchableOpacity style={styles.continueBtn} onPress={() => { setOrdered(false); setItems(SAMPLE_CART); }}>
-          <Text style={styles.continueBtnText}>Continue Shopping</Text>
+        <Text style={styles.successTitle}>Order Confirmed!</Text>
+        <Text style={styles.successSub}>Your plants are being carefully prepared. Estimated delivery in 3–5 business days.</Text>
+        <View style={styles.successCard}>
+          <Text style={styles.successCardTitle}>What Happens Next</Text>
+          {[
+            ['📦', 'Your order is being packed with care'],
+            ['🚚', 'Shipped within 24 hours'],
+            ['📍', 'Tracked delivery to your door'],
+            ['🌿', 'Enjoy your new plants!'],
+          ].map(([icon, text]) => (
+            <View key={text} style={styles.successStep}>
+              <Text style={{ fontSize: 18 }}>{icon}</Text>
+              <Text style={styles.successStepText}>{text}</Text>
+            </View>
+          ))}
+        </View>
+        <TouchableOpacity
+          style={styles.continueBtn}
+          onPress={() => { setOrdered(false); navigation.navigate('Home'); }}
+        >
+          <Text style={styles.continueBtnText}>Continue Shopping 🌿</Text>
         </TouchableOpacity>
       </View>
     );
@@ -46,61 +54,116 @@ export default function CartScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>My Cart</Text>
-        <Text style={styles.headerSub}>{items.length} items</Text>
+      <View style={[styles.header, { paddingTop: insets.top + (Platform.OS === 'web' ? 8 : 0) }]}>
+        <View style={styles.headerTop}>
+          <Text style={styles.headerTitle}>My Cart</Text>
+          {cart.length > 0 && (
+            <TouchableOpacity onPress={clearCart}>
+              <Text style={styles.clearText}>Clear All</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        {cartTotal >= 50 && (
+          <View style={styles.freeBanner}>
+            <Text style={styles.freeBannerText}>🎉 You qualify for free delivery!</Text>
+          </View>
+        )}
+        {cartTotal < 50 && cart.length > 0 && (
+          <View style={styles.nearFreeBanner}>
+            <Text style={styles.nearFreeText}>
+              Add ${(50 - cartTotal).toFixed(2)} more for free delivery 🚚
+            </Text>
+            <View style={styles.nearFreeBar}>
+              <View style={[styles.nearFreeProgress, { width: `${Math.min(100, (cartTotal / 50) * 100)}%` }]} />
+            </View>
+          </View>
+        )}
       </View>
 
-      {items.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyEmoji}>🛒</Text>
-          <Text style={styles.emptyText}>Your cart is empty</Text>
-          <Text style={styles.emptySub}>Add some plants to get started!</Text>
+      {cart.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Text style={{ fontSize: 72, marginBottom: 16 }}>🛒</Text>
+          <Text style={styles.emptyTitle}>Your cart is empty</Text>
+          <Text style={styles.emptySub}>Discover beautiful plants waiting for a new home.</Text>
+          <TouchableOpacity style={styles.shopBtn} onPress={() => navigation.navigate('Shop')}>
+            <Text style={styles.shopBtnText}>Browse Plants →</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <>
           <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
-            {items.map(item => (
-              <View key={item.id} style={styles.card}>
-                <View style={styles.cardEmoji}>
-                  <Text style={styles.emojiText}>{item.emoji}</Text>
+            {cart.map(item => (
+              <View key={item.id} style={styles.cartItem}>
+                <View style={[styles.itemImg, { backgroundColor: item.bgColor }]}>
+                  <Text style={{ fontSize: 32 }}>{item.emoji}</Text>
                 </View>
-                <View style={styles.cardBody}>
-                  <Text style={styles.itemName}>{item.name}</Text>
-                  <Text style={styles.itemPrice}>${item.price} each</Text>
+                <View style={styles.itemBody}>
+                  <View style={styles.itemTop}>
+                    <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
+                    <TouchableOpacity onPress={() => removeFromCart(item.id)}>
+                      <Text style={styles.removeBtn}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={styles.itemCare}>{item.care} care</Text>
+                  <View style={styles.itemBottom}>
+                    <View style={styles.qtyRow}>
+                      <TouchableOpacity style={styles.qtyBtn} onPress={() => updateQty(item.id, item.qty - 1)}>
+                        <Text style={styles.qtyBtnText}>−</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.qtyValue}>{item.qty}</Text>
+                      <TouchableOpacity style={styles.qtyBtn} onPress={() => updateQty(item.id, item.qty + 1)}>
+                        <Text style={styles.qtyBtnText}>+</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={styles.itemTotal}>${(item.price * item.qty).toFixed(2)}</Text>
+                  </View>
                 </View>
-                <View style={styles.qtyControl}>
-                  <TouchableOpacity style={styles.qtyBtn} onPress={() => updateQty(item.id, -1)}>
-                    <Text style={styles.qtyBtnText}>-</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.qtyValue}>{item.qty}</Text>
-                  <TouchableOpacity style={styles.qtyBtn} onPress={() => updateQty(item.id, 1)}>
-                    <Text style={styles.qtyBtnText}>+</Text>
-                  </TouchableOpacity>
-                </View>
-                <Text style={styles.itemTotal}>${(item.price * item.qty).toFixed(2)}</Text>
               </View>
             ))}
+
+            {/* Promo */}
+            <View style={styles.promoRow}>
+              <Text style={styles.promoInput}
+                onPress={() => {
+                  if (!promoApplied) {
+                    setPromoApplied(true);
+                    setPromoCode('LEAFBLOOM10');
+                  }
+                }}
+              >
+                {promoApplied ? '✓ LEAFBLOOM10 applied — 10% off!' : '🏷 Add promo code (try LEAFBLOOM10)'}
+              </Text>
+            </View>
+
             <View style={{ height: 16 }} />
           </ScrollView>
 
           <View style={styles.summary}>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Subtotal</Text>
-              <Text style={styles.summaryValue}>${subtotal.toFixed(2)}</Text>
+              <Text style={styles.summaryValue}>${cartTotal.toFixed(2)}</Text>
             </View>
+            {promoApplied && (
+              <View style={styles.summaryRow}>
+                <Text style={[styles.summaryLabel, { color: colors.success }]}>Promo (LEAFBLOOM10)</Text>
+                <Text style={[styles.summaryValue, { color: colors.success }]}>−${discount.toFixed(2)}</Text>
+              </View>
+            )}
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Delivery</Text>
-              <Text style={styles.summaryValue}>${delivery.toFixed(2)}</Text>
+              <Text style={[styles.summaryValue, delivery === 0 && { color: colors.success }]}>
+                {delivery === 0 ? 'FREE 🎉' : `$${delivery.toFixed(2)}`}
+              </Text>
             </View>
             <View style={styles.divider} />
             <View style={styles.summaryRow}>
               <Text style={styles.totalLabel}>Total</Text>
               <Text style={styles.totalValue}>${total.toFixed(2)}</Text>
             </View>
-            <TouchableOpacity style={styles.checkoutBtn} onPress={() => setOrdered(true)}>
-              <Text style={styles.checkoutBtnText}>Place Order 🌿</Text>
+            <TouchableOpacity style={styles.checkoutBtn} onPress={handleOrder}>
+              <Text style={styles.checkoutBtnText}>Place Order — ${total.toFixed(2)} 🌿</Text>
             </TouchableOpacity>
+            <Text style={styles.secureNote}>🔒 Secure checkout · Free returns</Text>
           </View>
         </>
       )}
@@ -111,93 +174,89 @@ export default function CartScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
-    backgroundColor: colors.primary,
-    paddingTop: Platform.OS === 'web' ? 24 : 60,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
+    backgroundColor: colors.surface, paddingHorizontal: 20, paddingBottom: 16,
+    borderBottomWidth: 1, borderBottomColor: colors.border,
   },
-  headerTitle: { color: colors.white, fontSize: 24, fontWeight: '700' },
-  headerSub: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 4 },
-  list: { flex: 1, paddingHorizontal: 16, paddingTop: 16 },
-  card: {
-    backgroundColor: colors.white,
-    borderRadius: 14,
-    marginBottom: 10,
-    padding: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
+  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12, marginBottom: 8 },
+  headerTitle: { fontSize: 22, fontWeight: '800', color: colors.text },
+  clearText: { fontSize: 13, color: colors.coral, fontWeight: '600' },
+  freeBanner: {
+    backgroundColor: '#E8F5E9', borderRadius: 10, padding: 10,
+    borderWidth: 1, borderColor: colors.light,
   },
-  cardEmoji: {
-    width: 50,
-    height: 50,
-    backgroundColor: colors.background,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
+  freeBannerText: { fontSize: 13, color: colors.success, fontWeight: '600', textAlign: 'center' },
+  nearFreeBanner: { backgroundColor: colors.amberLight, borderRadius: 10, padding: 10 },
+  nearFreeText: { fontSize: 12, color: '#E65100', fontWeight: '600', marginBottom: 6 },
+  nearFreeBar: { height: 4, backgroundColor: colors.border, borderRadius: 2 },
+  nearFreeProgress: { height: 4, backgroundColor: colors.amber, borderRadius: 2 },
+
+  list: { flex: 1, paddingHorizontal: 16, paddingTop: 12 },
+  cartItem: {
+    backgroundColor: colors.white, borderRadius: 14, marginBottom: 10,
+    flexDirection: 'row', overflow: 'hidden', ...shadows.sm,
   },
-  emojiText: { fontSize: 28 },
-  cardBody: { flex: 1 },
-  itemName: { fontSize: 14, fontWeight: '600', color: colors.text },
-  itemPrice: { fontSize: 12, color: colors.textLight, marginTop: 2 },
-  qtyControl: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 12 },
-  qtyBtn: {
-    backgroundColor: colors.background,
-    borderRadius: 8,
-    width: 28,
-    height: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
+  itemImg: { width: 80, justifyContent: 'center', alignItems: 'center' },
+  itemBody: { flex: 1, padding: 12 },
+  itemTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 2 },
+  itemName: { flex: 1, fontSize: 14, fontWeight: '700', color: colors.text, marginRight: 8 },
+  removeBtn: { fontSize: 14, color: colors.textLight, padding: 2 },
+  itemCare: { fontSize: 11, color: colors.textLight, marginBottom: 8 },
+  itemBottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  qtyRow: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: colors.surfaceAlt, borderRadius: 8,
   },
-  qtyBtnText: { fontSize: 16, color: colors.text, fontWeight: '600', lineHeight: 20 },
-  qtyValue: { fontSize: 15, fontWeight: '600', color: colors.text, marginHorizontal: 10 },
-  itemTotal: { fontSize: 15, fontWeight: '700', color: colors.primary, minWidth: 55, textAlign: 'right' },
+  qtyBtn: { width: 32, height: 32, justifyContent: 'center', alignItems: 'center' },
+  qtyBtnText: { fontSize: 18, color: colors.forest, fontWeight: '600' },
+  qtyValue: { fontSize: 14, fontWeight: '700', color: colors.text, width: 28, textAlign: 'center' },
+  itemTotal: { fontSize: 16, fontWeight: '800', color: colors.forest },
+
+  promoRow: {
+    backgroundColor: colors.white, borderRadius: 12, padding: 14,
+    borderWidth: 1, borderColor: colors.border, borderStyle: 'dashed',
+  },
+  promoInput: { fontSize: 13, color: colors.textMed, fontWeight: '500' },
+
   summary: {
-    backgroundColor: colors.white,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 8,
+    backgroundColor: colors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    padding: 24, ...shadows.lg,
   },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
-  summaryLabel: { color: colors.textLight, fontSize: 15 },
-  summaryValue: { color: colors.text, fontSize: 15 },
-  divider: { height: 1, backgroundColor: colors.border, marginVertical: 10 },
-  totalLabel: { color: colors.text, fontSize: 17, fontWeight: '700' },
-  totalValue: { color: colors.primary, fontSize: 20, fontWeight: '700' },
+  summaryLabel: { fontSize: 14, color: colors.textMed },
+  summaryValue: { fontSize: 14, color: colors.text, fontWeight: '600' },
+  divider: { height: 1, backgroundColor: colors.divider, marginVertical: 10 },
+  totalLabel: { fontSize: 17, fontWeight: '800', color: colors.text },
+  totalValue: { fontSize: 22, fontWeight: '800', color: colors.forest },
   checkoutBtn: {
-    backgroundColor: colors.primary,
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 16,
+    backgroundColor: colors.forest, borderRadius: 14, paddingVertical: 16,
+    alignItems: 'center', marginTop: 14, ...shadows.md,
   },
   checkoutBtnText: { color: colors.white, fontSize: 16, fontWeight: '700' },
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  emptyEmoji: { fontSize: 60, marginBottom: 16 },
-  emptyText: { fontSize: 20, fontWeight: '700', color: colors.text },
-  emptySub: { color: colors.textLight, marginTop: 8 },
-  successContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
-  successEmoji: { fontSize: 72, marginBottom: 20 },
-  successTitle: { fontSize: 28, fontWeight: '700', color: colors.text },
-  successSub: { color: colors.textLight, fontSize: 15, textAlign: 'center', marginTop: 12, lineHeight: 22 },
-  continueBtn: {
-    backgroundColor: colors.primary,
-    borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 32,
-    marginTop: 32,
+  secureNote: { fontSize: 12, color: colors.textLight, textAlign: 'center', marginTop: 10 },
+
+  emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
+  emptyTitle: { fontSize: 22, fontWeight: '700', color: colors.text, marginBottom: 8 },
+  emptySub: { fontSize: 14, color: colors.textLight, textAlign: 'center', lineHeight: 20, marginBottom: 28 },
+  shopBtn: {
+    backgroundColor: colors.forest, borderRadius: 14,
+    paddingHorizontal: 32, paddingVertical: 14,
   },
-  continueBtnText: { color: colors.white, fontSize: 16, fontWeight: '600' },
+  shopBtnText: { color: colors.white, fontSize: 15, fontWeight: '700' },
+
+  successContainer: { justifyContent: 'center', alignItems: 'center', padding: 32 },
+  successEmoji: { fontSize: 72, marginBottom: 16 },
+  successTitle: { fontSize: 28, fontWeight: '800', color: colors.text, marginBottom: 10 },
+  successSub: { fontSize: 14, color: colors.textMed, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
+  successCard: {
+    backgroundColor: colors.surface, borderRadius: 16, padding: 20, width: '100%', ...shadows.sm,
+    marginBottom: 24,
+  },
+  successCardTitle: { fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: 14 },
+  successStep: { flexDirection: 'row', gap: 12, marginBottom: 10, alignItems: 'center' },
+  successStepText: { fontSize: 13, color: colors.textMed },
+  continueBtn: {
+    backgroundColor: colors.forest, borderRadius: 14,
+    paddingHorizontal: 32, paddingVertical: 14,
+  },
+  continueBtnText: { color: colors.white, fontSize: 15, fontWeight: '700' },
 });
